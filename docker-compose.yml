@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: agente-solar-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - GENERIC_TIMEZONE=Europe/Madrid
+      - TZ=Europe/Madrid
+    volumes:
+      - n8n_data:/home/node/.n8n
+      # Monta los scripts de Python dentro del contenedor n8n
+      - C:\Users\Porras\Desktop\GitHub\Solexia:/agente-solar
+
+  flowise:
+    image: flowiseai/flowise:latest
+    container_name: agente-solar-flowise
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - FLOWISE_USERNAME=${FLOWISE_USERNAME}
+      - FLOWISE_PASSWORD=${FLOWISE_PASSWORD}
+    volumes:
+      - flowise_data:/root/.flowise
+    entrypoint: /bin/sh -c "sleep 3 && flowise start"
+
+volumes:
+  n8n_data:
+  flowise_data:

@@ -1,0 +1,36 @@
+# Credenciales y tokens OAuth
+.env
+.env.*
+!.env.example
+credentials.json
+token_calendar.json
+
+# Logs (may contain emails and client data)
+*.log
+logs/
+
+# Temporary files (atomic writes)
+*.tmp
+
+# Scoring checkpoint (intermediate data)
+scoring_checkpoint.json
+data/scoring_checkpoint.json
+
+# Generated data with real company information (GDPR / privacy)
+data/companies.json
+data/qualified_leads.json
+data/generated_emails.json
+data/leads_with_solar_data.json
+data/proposals/
+
+# Legacy paths (pre-reorganisation — kept for backwards compatibility)
+empresas.json
+leads_cualificados.json
+emails_generados.json
+leads_con_pvgis.json
+propuestas/
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo

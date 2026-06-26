@@ -1,0 +1,145 @@
+{
+  "name": "Solexia: Seguimiento automático",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🔁 Automatic follow-up — Solexia\n\n**Runs every day at 9:00 AM.**\n\nCalls: `http://host.docker.internal:8765/followup`\n\nDetects leads with:\n- `estado_envio == \"enviado\"`\n- No reply after **3 days**\n- Sends a second follow-up email\n\n**No candidates → silent** (no Telegram).\n**Candidates found → notifies** with the summary.",
+        "height": 260,
+        "width": 400,
+        "color": 3
+      },
+      "id": "c3d4e5f6-a7b8-4901-c2d3-e4f5a6b7c8d3",
+      "name": "📋 Info Flujo",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [180, 40]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 9,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "c3d4e5f6-a7b8-4901-c2d3-e4f5a6b7c8d4",
+      "name": "🕘 Cron 9:00 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [260, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8765/followup",
+        "options": {
+          "timeout": 3600000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "c3d4e5f6-a7b8-4901-c2d3-e4f5a6b7c8d5",
+      "name": "🔁 Ejecutar Seguimiento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [520, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $input.first().json;\nconst stdout = resp.stdout || '';\nconst ok = resp.ok === true;\nconst duracion = resp.duracion_s ? `${Math.floor(resp.duracion_s/60)}m ${resp.duracion_s%60}s` : 'N/D';\n\nconst candidatosMatch = stdout.match(/Without reply > \\d+ days\\s*:\\s*(\\d+)/);\nconst enviadosMatch   = stdout.match(/Follow-ups OK\\s*:\\s*(\\d+)/);\nconst erroresMatch    = stdout.match(/Errors\\/Bounces\\s*:\\s*(\\d+)/);\n\nconst candidatos = candidatosMatch ? parseInt(candidatosMatch[1]) : 0;\nconst enviados   = enviadosMatch   ? parseInt(enviadosMatch[1])   : 0;\nconst errores    = erroresMatch    ? parseInt(erroresMatch[1])    : 0;\n\nconst fecha = new Date().toLocaleString('es-ES', {timeZone: 'Europe/Madrid'});\nlet message = null;\n\nif (!ok) {\n  message = `❌ <b>Error en seguimiento</b>\\n📅 ${fecha}\\n\\n<pre>${(resp.stderr||stdout).slice(-400)}</pre>`;\n} else if (enviados > 0) {\n  const ico = errores > 0 ? '⚠️' : '✅';\n  message = `${ico} <b>Seguimiento automático completado</b>\\n📅 ${fecha}\\n\\n` +\n            `🔍 Candidatos sin respuesta: ${candidatos}\\n` +\n            `✉️ Seguimientos enviados: <b>${enviados}</b>\\n` +\n            `❌ Errores: ${errores}\\n` +\n            `⏱ Tiempo: ${duracion}`;\n}\n// Si enviados===0 y sin error → message=null → IF lo filtra\nreturn [{ json: { message, ok, candidatos, enviados, hayQueNotificar: message !== null } }];"
+      },
+      "id": "c3d4e5f6-a7b8-4901-c2d3-e4f5a6b7c8d6",
+      "name": "📊 Parsear Resultados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [780, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond-notif",
+              "leftValue": "={{ $json.hayQueNotificar }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c3d4e5f6-a7b8-4901-c2d3-e4f5a6b7c8d7",
+      "name": "🔍 ¿Hay que notificar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1040, 400]
+    },
+    {
+      "parameters": {
+        "chatId": "TU_TELEGRAM_CHAT_ID",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-solexia",
+          "name": "Telegram Solexia"
+        }
+      },
+      "id": "c3d4e5f6-a7b8-4901-c2d3-e4f5a6b7c8d8",
+      "name": "📱 Notificar Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1300, 300]
+    },
+    {
+      "parameters": {
+        "content": "### ✅ Sin novedades\nNo hay leads sin respuesta ≥3 días.\nFlujo termina silenciosamente.",
+        "height": 100,
+        "width": 240,
+        "color": 6
+      },
+      "id": "c3d4e5f6-a7b8-4901-c2d3-e4f5a6b7c8d9",
+      "name": "🔕 Sin acción",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1300, 480]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "🕘 Cron 9:00 AM": {
+      "main": [[{ "node": "🔁 Ejecutar Seguimiento", "type": "main", "index": 0 }]]
+    },
+    "🔁 Ejecutar Seguimiento": {
+      "main": [[{ "node": "📊 Parsear Resultados",   "type": "main", "index": 0 }]]
+    },
+    "📊 Parsear Resultados": {
+      "main": [[{ "node": "🔍 ¿Hay que notificar?",  "type": "main", "index": 0 }]]
+    },
+    "🔍 ¿Hay que notificar?": {
+      "main": [
+        [{ "node": "📱 Notificar Telegram", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1", "saveManualExecutions": true },
+  "versionId": "b3c4d5e6-f7a8-4901-b2c3-d4e5f6a7b8c9",
+  "meta": { "templateCredsSetupCompleted": true, "instanceId": "local" },
+  "id": "flujo-03-seguimiento",
+  "tags": [{ "id": "tag-solexia", "name": "solexia" }]
+}

@@ -1,0 +1,104 @@
+{
+  "name": "Solexia: Pipeline nocturno",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## ☀️ Nightly pipeline — Solexia\n\n**Runs every night at 3:00 AM.**\n\nCalls the local server `src/api_server.py` via HTTP.\n\n**Before activating this flow:**\n```\ncd agente-solar/src\npython api_server.py\n```\nLeave that terminal open. n8n calls it at:\n`http://host.docker.internal:8765/pipeline`\n\nPipeline steps:\n1. 🔍 Google Maps scraper\n2. ⭐ Claude API scoring\n3. ✉️ Email generation\n4. ☀️ PVGIS solar calculation\n5. 📄 PDF proposal generation",
+        "height": 340,
+        "width": 440,
+        "color": 4
+      },
+      "id": "a1b2c3d4-e5f6-4789-a012-b3c4d5e6f7a1",
+      "name": "📋 Configuración",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [180, 40]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 3,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-e5f6-4789-a012-b3c4d5e6f7a2",
+      "name": "🕐 Cron 3:00 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [260, 440]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8765/pipeline",
+        "options": {
+          "timeout": 7200000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "a1b2c3d4-e5f6-4789-a012-b3c4d5e6f7a3",
+      "name": "⚙️ Ejecutar Pipeline",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [520, 440]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $input.first().json;\nconst stdout = resp.stdout || '';\nconst ok = resp.ok === true;\nconst exitCode = resp.exit_code ?? -1;\nconst duracion = resp.duracion_s ? `${Math.floor(resp.duracion_s/60)}m ${resp.duracion_s%60}s` : 'N/D';\n\n// Extract totals from pipeline output\nconst empresasMatch = stdout.match(/TOTAL\\s+(\\d+)\\s+businesses/);\nconst leadsMatch    = stdout.match(/Qualified leads\\s*:\\s*(\\d+)/);\nconst emailsMatch   = stdout.match(/Emails generated\\s*:\\s*(\\d+)/);\nconst pvgisMatch    = stdout.match(/with PVGIS\\s*:\\s*(\\d+)/);\nconst pdfsMatch     = stdout.match(/PDFs generated\\s*:\\s*(\\d+)/);\n\nconst empresas = empresasMatch ? empresasMatch[1] : '?';\nconst leads    = leadsMatch    ? leadsMatch[1]    : '?';\nconst emails   = emailsMatch   ? emailsMatch[1]   : '?';\nconst pvgis    = pvgisMatch    ? pvgisMatch[1]    : '?';\nconst pdfs     = pdfsMatch     ? pdfsMatch[1]     : '?';\n\nconst fecha = new Date().toLocaleString('es-ES', {timeZone: 'Europe/Madrid'});\n\nconst message = ok\n  ? `🌞 <b>Pipeline nocturno completado</b>\\n` +\n    `📅 ${fecha}\\n\\n` +\n    `📊 <b>Resultados:</b>\\n` +\n    `  🔍 Companies scraped: ${empresas}\\n` +\n    `  ⭐ Qualified leads: ${leads}\\n` +\n    `  ✉️ Emails generated: ${emails}\\n` +\n    `  ☀️ PVGIS analysis: ${pvgis}\\n` +\n    `  📄 PDFs creados: ${pdfs}\\n` +\n    `  ⏱ Tiempo total: ${duracion}\\n\\n` +\n    `✅ Sistema listo para envío de emails.`\n  : `❌ <b>Pipeline nocturno FALLÓ</b>\\n` +\n    `📅 ${fecha} | Exit code: ${exitCode}\\n\\n` +\n    `<pre>${(resp.stderr || stdout).slice(-500)}</pre>`;\n\nreturn [{ json: { message, ok, empresas, leads, emails, pdfs, duracion } }];"
+      },
+      "id": "a1b2c3d4-e5f6-4789-a012-b3c4d5e6f7a4",
+      "name": "📊 Parsear Resultados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [780, 440]
+    },
+    {
+      "parameters": {
+        "chatId": "TU_TELEGRAM_CHAT_ID",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-solexia",
+          "name": "Telegram Solexia"
+        }
+      },
+      "id": "a1b2c3d4-e5f6-4789-a012-b3c4d5e6f7a5",
+      "name": "📱 Notificar Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1040, 440]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "🕐 Cron 3:00 AM": {
+      "main": [[{ "node": "⚙️ Ejecutar Pipeline",  "type": "main", "index": 0 }]]
+    },
+    "⚙️ Ejecutar Pipeline": {
+      "main": [[{ "node": "📊 Parsear Resultados", "type": "main", "index": 0 }]]
+    },
+    "📊 Parsear Resultados": {
+      "main": [[{ "node": "📱 Notificar Telegram", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1", "saveManualExecutions": true },
+  "versionId": "f1a2b3c4-d5e6-4789-f0a1-b2c3d4e5f6a7",
+  "meta": { "templateCredsSetupCompleted": true, "instanceId": "local" },
+  "id": "flujo-01-pipeline",
+  "tags": [{ "id": "tag-solexia", "name": "solexia" }]
+}

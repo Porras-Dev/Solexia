@@ -1,0 +1,93 @@
+{
+  "name": "Solexia: Envío de emails",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## ✉️ Email sending — Solexia\n\n**Manual activation** from this panel.\n\nRequires `src/api_server.py` running:\n```\ncd agente-solar/src\npython api_server.py\n```\n\nCalls: `http://host.docker.internal:8765/emails`\n\n⚠️ With 30s delay between emails and ~86 leads with email, the process takes ~45 minutes. Telegram notification arrives when done.",
+        "height": 240,
+        "width": 400,
+        "color": 5
+      },
+      "id": "b2c3d4e5-f6a7-4890-b1c2-d3e4f5a6b7c2",
+      "name": "📋 Info Flujo",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [180, 40]
+    },
+    {
+      "parameters": {},
+      "id": "b2c3d4e5-f6a7-4890-b1c2-d3e4f5a6b7c3",
+      "name": "▶️ Inicio Manual",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [260, 360]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8765/emails",
+        "options": {
+          "timeout": 3600000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "b2c3d4e5-f6a7-4890-b1c2-d3e4f5a6b7c5",
+      "name": "📧 Enviar Emails",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [520, 360]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $input.first().json;\nconst stdout = resp.stdout || '';\nconst ok = resp.ok === true;\nconst duracion = resp.duracion_s ? `${Math.floor(resp.duracion_s/60)}m ${resp.duracion_s%60}s` : 'N/D';\n\nconst enviadosMatch = stdout.match(/Enviados OK\\s*:\\s*(\\d+)/);\nconst erroresMatch  = stdout.match(/Errores\\/Bounces\\s*:\\s*(\\d+)/);\n\nconst enviados = enviadosMatch ? parseInt(enviadosMatch[1]) : 0;\nconst errores  = erroresMatch  ? parseInt(erroresMatch[1])  : 0;\nconst fecha = new Date().toLocaleString('es-ES', {timeZone: 'Europe/Madrid'});\n\nlet message;\nif (!ok) {\n  message = `❌ <b>Error en envío de emails</b>\\n📅 ${fecha}\\n\\n<pre>${(resp.stderr || stdout).slice(-400)}</pre>`;\n} else if (enviados === 0) {\n  message = `ℹ️ <b>Envío completado</b>\\n📅 ${fecha}\\n\\nNo había emails pendientes con dirección de contacto.`;\n} else {\n  const ico = errores > 0 ? '⚠️' : '✅';\n  message = `${ico} <b>Envío de emails completado</b>\\n📅 ${fecha}\\n\\n` +\n            `✉️ Enviados: <b>${enviados}</b>\\n` +\n            `❌ Errores: ${errores}\\n` +\n            `⏱ Tiempo: ${duracion}\\n\\n` +\n            `📋 Status updated in <code>generated_emails.json</code>`;\n}\nreturn [{ json: { message, ok, enviados, errores } }];"
+      },
+      "id": "b2c3d4e5-f6a7-4890-b1c2-d3e4f5a6b7c6",
+      "name": "📊 Parsear Resultados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [780, 360]
+    },
+    {
+      "parameters": {
+        "chatId": "TU_TELEGRAM_CHAT_ID",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-solexia",
+          "name": "Telegram Solexia"
+        }
+      },
+      "id": "b2c3d4e5-f6a7-4890-b1c2-d3e4f5a6b7c7",
+      "name": "📱 Notificar Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1040, 360]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "▶️ Inicio Manual": {
+      "main": [[{ "node": "📧 Enviar Emails",      "type": "main", "index": 0 }]]
+    },
+    "📧 Enviar Emails": {
+      "main": [[{ "node": "📊 Parsear Resultados", "type": "main", "index": 0 }]]
+    },
+    "📊 Parsear Resultados": {
+      "main": [[{ "node": "📱 Notificar Telegram", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1", "saveManualExecutions": true },
+  "versionId": "a2b3c4d5-e6f7-4890-a1b2-c3d4e5f6a7b8",
+  "meta": { "templateCredsSetupCompleted": true, "instanceId": "local" },
+  "id": "flujo-02-emails",
+  "tags": [{ "id": "tag-solexia", "name": "solexia" }]
+}
